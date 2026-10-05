@@ -1,486 +1,357 @@
 "use client";
 
-import React, { useState } from "react";
-import {
-  Bell,
-  BookOpen,
-  Calendar,
-  CheckCircle2,
-  Clock,
-  Flame,
-  GraduationCap,
-  LayoutDashboard,
-  LogOut,
-  MessageSquare,
-  Search,
-  Sparkles,
-  Trophy,
-  User,
-  Video,
-  AlertCircle,
-  ArrowRight,
-  FileText,
-  ChevronRight,
-  Menu,
-  X
-} from "lucide-react";
-import { cn } from "@/lib/utils";
+import React, { useState, useEffect, useRef } from "react";
+import Image from "next/image";
+import { Mail, Lock, Eye, EyeOff, ArrowRight, ArrowLeft } from "lucide-react";
+import { motion, AnimatePresence, Variants } from "framer-motion";
 
-export default function StudentDashboard() {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState("dashboard");
+type AuthState = "LOGIN" | "REGISTER" | "FORGOT_PASSWORD";
+
+/* =========================================
+   COMPONENT: HIỆU ỨNG HẠT NETWORK (CANVAS)
+   (Chỉ chạy trên Desktop, nối theo chuột)
+   ========================================= */
+const ParticleNetwork = () => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    let particlesArray: Particle[] = [];
+    let animationFrameId: number;
+
+    const mouse = { x: -1000, y: -1000 };
+
+    const handleResize = () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      initParticles();
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      mouse.x = e.clientX;
+      mouse.y = e.clientY;
+    };
+
+    const handleMouseLeave = () => {
+      mouse.x = -1000;
+      mouse.y = -1000;
+    };
+
+    window.addEventListener("resize", handleResize);
+    window.addEventListener("mousemove", handleMouseMove);
+    document.body.addEventListener("mouseleave", handleMouseLeave);
+
+    class Particle {
+      x: number;
+      y: number;
+      size: number;
+      speedX: number;
+      speedY: number;
+
+      constructor() {
+        this.x = Math.random() * canvas!.width;
+        this.y = Math.random() * canvas!.height;
+        this.size = Math.random() * 2 + 0.5;
+        this.speedX = (Math.random() - 0.5) * 0.8;
+        this.speedY = (Math.random() - 0.5) * 0.8;
+      }
+      update() {
+        this.x += this.speedX;
+        this.y += this.speedY;
+        if (this.x > canvas!.width || this.x < 0) this.speedX = -this.speedX;
+        if (this.y > canvas!.height || this.y < 0) this.speedY = -this.speedY;
+      }
+      draw() {
+        ctx!.fillStyle = "rgba(56, 189, 248, 0.5)"; // Màu Cyan
+        ctx!.beginPath();
+        ctx!.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx!.fill();
+      }
+    }
+
+    const initParticles = () => {
+      particlesArray = [];
+      const numberOfParticles = (canvas.width * canvas.height) / 12000; // Mật độ hạt
+      for (let i = 0; i < numberOfParticles; i++) {
+        particlesArray.push(new Particle());
+      }
+    };
+
+    const connectParticles = () => {
+      let opacityValue = 1;
+      for (let a = 0; a < particlesArray.length; a++) {
+        for (let b = a; b < particlesArray.length; b++) {
+          const dx = particlesArray[a].x - particlesArray[b].x;
+          const dy = particlesArray[a].y - particlesArray[b].y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+
+          // Nối các hạt với nhau
+          if (distance < 100) {
+            opacityValue = 1 - distance / 100;
+            ctx!.strokeStyle = `rgba(139, 92, 246, ${opacityValue * 0.2})`; // Violet mờ
+            ctx!.lineWidth = 1;
+            ctx!.beginPath();
+            ctx!.moveTo(particlesArray[a].x, particlesArray[a].y);
+            ctx!.lineTo(particlesArray[b].x, particlesArray[b].y);
+            ctx!.stroke();
+          }
+        }
+        // Nối hạt với chuột (Tạo cảm giác lan tỏa/tế bào)
+        const dxMouse = particlesArray[a].x - mouse.x;
+        const dyMouse = particlesArray[a].y - mouse.y;
+        const distanceMouse = Math.sqrt(dxMouse * dxMouse + dyMouse * dyMouse);
+        if (distanceMouse < 150) {
+          opacityValue = 1 - distanceMouse / 150;
+          ctx!.strokeStyle = `rgba(56, 189, 248, ${opacityValue * 0.5})`; // Cyan rõ hơn
+          ctx!.lineWidth = 1.5;
+          ctx!.beginPath();
+          ctx!.moveTo(particlesArray[a].x, particlesArray[a].y);
+          ctx!.lineTo(mouse.x, mouse.y);
+          ctx!.stroke();
+        }
+      }
+    };
+
+    const animate = () => {
+      ctx!.clearRect(0, 0, canvas.width, canvas.height);
+      for (let i = 0; i < particlesArray.length; i++) {
+        particlesArray[i].update();
+        particlesArray[i].draw();
+      }
+      connectParticles();
+      animationFrameId = requestAnimationFrame(animate);
+    };
+
+    handleResize();
+    animate();
+
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      window.removeEventListener("mousemove", handleMouseMove);
+      document.body.removeEventListener("mouseleave", handleMouseLeave);
+      cancelAnimationFrame(animationFrameId);
+    };
+  }, []);
+
+  return <canvas ref={canvasRef} className="absolute inset-0 z-0 hidden md:block" />;
+};
+
+/* =========================================
+   MAIN COMPONENT: AUTH PAGE
+   ========================================= */
+export default function AuthPage() {
+  const [authState, setAuthState] = useState<AuthState>("LOGIN");
+  const [showPassword, setShowPassword] = useState(false);
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    console.log("Submit:", { authState, email, password, name });
+  };
+
+  const formVariants: Variants = {
+    hidden: { opacity: 0, x: -20 },
+    enter: { opacity: 1, x: 0, transition: { duration: 0.4, ease: "easeOut" } },
+    exit: { opacity: 0, x: 20, transition: { duration: 0.3, ease: "easeIn" } }
+  };
 
   return (
-    <div className="min-h-screen bg-ocean-bg text-ocean-text-primary flex flex-col font-sans">
-      {/* Top Header */}
-      <header className="sticky top-0 z-50 bg-ocean-surface/90 backdrop-blur-md border-b border-ocean-border px-4 lg:px-8 h-16 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-ocean-cyan to-ocean-violet flex items-center justify-center text-ocean-bg shadow-lg shadow-ocean-cyan/10">
-            <GraduationCap className="w-6 h-6 stroke-[2.5]" />
-          </div>
-          <div>
-            <h1 className="font-bold text-lg tracking-tight text-ocean-text-primary flex items-center gap-2">
-              Lyneo Education
-              <span className="text-xs px-2 py-0.5 rounded-full bg-ocean-cyan/10 text-ocean-cyan border border-ocean-cyan/20 font-medium hidden sm:inline-block">
-                THPT 2026
-              </span>
-            </h1>
-            <p className="text-xs text-ocean-text-secondary hidden sm:block">
-              Nền tảng học tập nội bộ chuẩn chuyên sâu
-            </p>
-          </div>
-        </div>
+    <main className="min-h-screen bg-[#070B14] flex flex-col items-center justify-center p-4 relative overflow-hidden">
+      
+      {/* 1. BACKGROUND EFFECTS */}
+      {/* Mạng lưới hạt tương tác chuột (Chỉ hiện Desktop) */}
+      <ParticleNetwork />
 
-        {/* Search bar & actions */}
-        <div className="hidden md:flex items-center flex-1 max-w-md mx-8">
-          <div className="relative w-full">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-ocean-text-secondary" />
-            <input
-              type="text"
-              placeholder="Tìm kiếm bài giảng, tài liệu, đề thi (Ctrl + K)..."
-              className="w-full bg-ocean-bg border border-ocean-border rounded-xl pl-10 pr-4 py-2 text-sm text-ocean-text-primary placeholder:text-ocean-text-secondary/60 focus:outline-none focus:border-ocean-cyan transition-colors"
+      {/* Các khối màu Blob di chuyển (Rõ hơn trên Mobile) */}
+      <motion.div 
+        animate={{ 
+          x: ["-10%", "10%", "-10%"], y: ["-10%", "20%", "-10%"], scale: [1, 1.2, 1] 
+        }}
+        transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
+        className="absolute top-0 left-[-20%] w-[300px] h-[300px] md:w-[500px] md:h-[500px] bg-[#38BDF8] rounded-full blur-[100px] md:blur-[150px] opacity-15 md:opacity-[0.08] pointer-events-none z-0" 
+      />
+      <motion.div 
+        animate={{ 
+          x: ["10%", "-10%", "10%"], y: ["20%", "-10%", "20%"], scale: [1.2, 1, 1.2] 
+        }}
+        transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
+        className="absolute bottom-0 right-[-20%] w-[300px] h-[300px] md:w-[600px] md:h-[600px] bg-[#8B5CF6] rounded-full blur-[100px] md:blur-[150px] opacity-15 md:opacity-[0.06] pointer-events-none z-0" 
+      />
+
+      {/* 2. KHỐI ĐĂNG NHẬP (Z-Index cao hơn để không bị canvas đè) */}
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.6, ease: "easeOut" }}
+        className="w-full max-w-[420px] bg-[#101A2C]/70 backdrop-blur-2xl border border-[#24344E] rounded-2xl p-8 shadow-[0_8px_32px_rgba(0,0,0,0.5)] relative z-10"
+      >
+        
+        {/* Header Nhận diện */}
+        <div className="mb-8 text-center flex flex-col items-center">
+          <motion.div 
+            whileHover={{ scale: 1.1, rotate: 5 }}
+            whileTap={{ scale: 0.9 }}
+            className="w-16 h-16 bg-white rounded-full p-1 mb-4 shadow-[0_0_20px_rgba(56,189,248,0.3)] cursor-pointer"
+          >
+            <Image 
+              src="/favicon.ico" alt="Logo THPT Trần Phú" 
+              width={20} 
+              height={20}
+              className="w-full h-full object-contain rounded-full"
             />
-          </div>
+          </motion.div>
+          
+          {/* Text Gradient chuyển động lướt ánh sáng */}
+          <motion.h1 
+            animate={{ backgroundPosition: ["0% 50%", "100% 50%", "0% 50%"] }}
+            transition={{ duration: 5, repeat: Infinity, ease: "linear" }}
+            style={{ backgroundSize: "200% auto" }}
+            className="text-2xl font-bold bg-gradient-to-r from-[#38BDF8] via-[#EAF2FF] to-[#8B5CF6] text-transparent bg-clip-text mb-1"
+          >
+            Lyneo Education
+          </motion.h1>
+          <h2 className="text-sm font-medium text-[#91A4C1] mb-5 uppercase tracking-wider">
+            THPT Trần Phú
+          </h2>
         </div>
 
-        <div className="flex items-center gap-3">
-          {/* Notification Button */}
-          <button
-            aria-label="Thông báo"
-            className="relative p-2.5 rounded-xl bg-ocean-surface-elevated border border-ocean-border text-ocean-text-secondary hover:text-ocean-cyan hover:border-ocean-cyan/40 transition-all"
-          >
-            <Bell className="w-5 h-5" />
-            <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-ocean-cyan animate-pulse" />
-          </button>
+        {/* Khu vực Form */}
+        <div className="relative overflow-hidden">
+          <AnimatePresence mode="wait">
+            <motion.form 
+              key={authState} variants={formVariants} initial="hidden" animate="enter" exit="exit"
+              onSubmit={handleSubmit} className="space-y-4"
+            >
+              {authState === "REGISTER" && (
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-[#91A4C1] ml-1">Họ và tên</label>
+                  <div className="relative">
+                    <input type="text" required placeholder="Nguyễn Văn A" value={name} onChange={(e) => setName(e.target.value)} className="w-full h-12 bg-[#16243A]/80 border border-[#24344E] text-[#EAF2FF] rounded-xl px-4 pl-11 focus:outline-none focus:border-[#38BDF8] focus:ring-1 focus:ring-[#38BDF8] transition-all placeholder:text-[#24344E]" />
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#91A4C1]">@</span>
+                  </div>
+                </div>
+              )}
 
-          {/* Profile User */}
-          <div className="flex items-center gap-3 pl-3 border-l border-ocean-border">
-            <div className="w-9 h-9 rounded-xl bg-ocean-surface-elevated border border-ocean-border flex items-center justify-center text-ocean-cyan font-semibold text-sm">
-              AN
-            </div>
-            <div className="hidden lg:block text-left">
-              <div className="text-sm font-semibold text-ocean-text-primary">Nguyễn Văn An</div>
-              <div className="text-xs text-ocean-text-secondary">Lớp 12A1 • Khối Chuyên</div>
-            </div>
-          </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-[#91A4C1] ml-1">Email trường học</label>
+                <div className="relative group">
+                  <input type="email" required placeholder="hocsinh@truong.edu.vn" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full h-12 bg-[#16243A]/80 border border-[#24344E] text-[#EAF2FF] rounded-xl px-4 pl-11 focus:outline-none focus:border-[#38BDF8] focus:ring-1 focus:ring-[#38BDF8] transition-all placeholder:text-[#24344E]" />
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#91A4C1] group-focus-within:text-[#38BDF8] transition-colors" />
+                </div>
+              </div>
 
-          {/* Mobile menu button */}
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="md:hidden p-2.5 rounded-xl bg-ocean-surface-elevated border border-ocean-border text-ocean-text-secondary"
-            aria-label="Mở menu"
-          >
-            {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-          </button>
+              {authState !== "FORGOT_PASSWORD" && (
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between ml-1">
+                    <label className="text-sm font-medium text-[#91A4C1]">Mật khẩu</label>
+                    {authState === "LOGIN" && (
+                      <button type="button" onClick={() => setAuthState("FORGOT_PASSWORD")} className="text-xs text-[#38BDF8] hover:text-[#0EA5E9] transition-colors">Quên mật khẩu?</button>
+                    )}
+                  </div>
+                  <div className="relative group">
+                    <input type={showPassword ? "text" : "password"} required placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} className="w-full h-12 bg-[#16243A]/80 border border-[#24344E] text-[#EAF2FF] rounded-xl px-4 pl-11 pr-11 focus:outline-none focus:border-[#38BDF8] focus:ring-1 focus:ring-[#38BDF8] transition-all placeholder:text-[#24344E]" />
+                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#91A4C1] group-focus-within:text-[#38BDF8] transition-colors" />
+                    
+                    {/* Animation bật/tắt mật khẩu */}
+                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-[#91A4C1] hover:text-[#EAF2FF] transition-colors overflow-hidden flex items-center justify-center w-5 h-5">
+                      <AnimatePresence mode="wait" initial={false}>
+                        <motion.div
+                          key={showPassword ? "eye" : "eyeOff"}
+                          initial={{ opacity: 0, rotate: -90, scale: 0.5 }}
+                          animate={{ opacity: 1, rotate: 0, scale: 1 }}
+                          exit={{ opacity: 0, rotate: 90, scale: 0.5 }}
+                          transition={{ duration: 0.15 }}
+                        >
+                          {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                        </motion.div>
+                      </AnimatePresence>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Nút Submit có Animation sóng lấp lánh (Shine effect) */}
+              <motion.button 
+                whileHover={{ scale: 1.02 }} 
+                whileTap={{ scale: 0.98 }}
+                type="submit" 
+                className="relative w-full h-12 mt-4 bg-[#38BDF8] hover:bg-[#0EA5E9] text-[#070B14] font-bold rounded-xl flex items-center justify-center gap-2 transition-all shadow-[0_0_15px_rgba(56,189,248,0.4)] overflow-hidden group"
+              >
+                {/* Lớp ánh sáng chạy qua nút */}
+                <div className="absolute inset-0 w-[200%] h-full bg-gradient-to-r from-transparent via-white/30 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]" />
+                
+                <span className="relative z-10 flex items-center gap-2">
+                  {authState === "LOGIN" && <>Đăng nhập <ArrowRight className="w-4 h-4" /></>}
+                  {authState === "REGISTER" && "Tạo tài khoản"}
+                  {authState === "FORGOT_PASSWORD" && "Khôi phục"}
+                </span>
+              </motion.button>
+            </motion.form>
+          </AnimatePresence>
         </div>
-      </header>
 
-      {/* Main Layout Container */}
-      <div className="flex-1 flex max-w-7xl w-full mx-auto">
-        {/* Desktop Sidebar */}
-        <aside className="hidden md:flex flex-col w-64 border-r border-ocean-border p-6 gap-6 bg-ocean-bg/50">
-          <div className="space-y-1">
-            <p className="px-3 text-xs font-semibold text-ocean-text-secondary uppercase tracking-wider mb-2">
-              Menu Chính
-            </p>
-            <button
-              onClick={() => setActiveTab("dashboard")}
-              className={cn(
-                "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all",
-                activeTab === "dashboard"
-                  ? "bg-ocean-cyan/10 text-ocean-cyan border border-ocean-cyan/20 shadow-sm"
-                  : "text-ocean-text-secondary hover:text-ocean-text-primary hover:bg-ocean-surface"
-              )}
-            >
-              <LayoutDashboard className="w-4 h-4" />
-              Tổng quan
-            </button>
-            <button
-              onClick={() => setActiveTab("courses")}
-              className={cn(
-                "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all",
-                activeTab === "courses"
-                  ? "bg-ocean-cyan/10 text-ocean-cyan border border-ocean-cyan/25 shadow-sm"
-                  : "text-ocean-text-secondary hover:text-ocean-text-primary hover:bg-ocean-surface"
-              )}
-            >
-              <BookOpen className="w-4 h-4" />
-              Khóa học & Bài giảng
-            </button>
-            <button
-              onClick={() => setActiveTab("schedule")}
-              className={cn(
-                "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all",
-                activeTab === "schedule"
-                  ? "bg-ocean-cyan/10 text-ocean-cyan border border-ocean-cyan/25 shadow-sm"
-                  : "text-ocean-text-secondary hover:text-ocean-text-primary hover:bg-ocean-surface"
-              )}
-            >
-              <Calendar className="w-4 h-4" />
-              Lịch học & Trực tuyến
-            </button>
-            <button
-              onClick={() => setActiveTab("exams")}
-              className={cn(
-                "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all",
-                activeTab === "exams"
-                  ? "bg-ocean-cyan/10 text-ocean-cyan border border-ocean-cyan/25 shadow-sm"
-                  : "text-ocean-text-secondary hover:text-ocean-text-primary hover:bg-ocean-surface"
-              )}
-            >
-              <FileText className="w-4 h-4" />
-              Phòng luyện đề THPT
-            </button>
-          </div>
-
-          <div className="space-y-1 pt-4 border-t border-ocean-border">
-            <p className="px-3 text-xs font-semibold text-ocean-text-secondary uppercase tracking-wider mb-2">
-              Cộng đồng & Hỗ trợ
-            </p>
-            <button
-              onClick={() => setActiveTab("leaderboard")}
-              className={cn(
-                "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all",
-                activeTab === "leaderboard"
-                  ? "bg-ocean-cyan/10 text-ocean-cyan border border-ocean-cyan/25 shadow-sm"
-                  : "text-ocean-text-secondary hover:text-ocean-text-primary hover:bg-ocean-surface"
-              )}
-            >
-              <Trophy className="w-4 h-4 text-amber-400" />
-              Bảng xếp hạng tuần
-            </button>
-            <button
-              onClick={() => setActiveTab("messages")}
-              className={cn(
-                "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all",
-                activeTab === "messages"
-                  ? "bg-ocean-cyan/10 text-ocean-cyan border border-ocean-cyan/25 shadow-sm"
-                  : "text-ocean-text-secondary hover:text-ocean-text-primary hover:bg-ocean-surface"
-              )}
-            >
-              <MessageSquare className="w-4 h-4" />
-              Hỏi đáp giáo viên
-            </button>
-          </div>
-
-          {/* Streak Card Widget in Sidebar */}
-          <div className="mt-auto p-4 rounded-2xl bg-ocean-surface border border-ocean-border relative overflow-hidden">
-            <div className="absolute -right-4 -bottom-4 w-20 h-20 bg-amber-500/10 rounded-full blur-xl pointer-events-none" />
-            <div className="flex items-center gap-3 mb-2">
-              <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                <Flame className="w-5 h-5" />
-              </div>
-              <div>
-                <div className="text-xs text-ocean-text-secondary">Chuỗi học tập</div>
-                <div className="text-base font-bold text-ocean-text-primary">12 Ngày liên tục</div>
-              </div>
-            </div>
-            <p className="text-xs text-ocean-text-secondary">
-              Tuyệt vời! Bạn chỉ còn 3 ngày nữa để đạt huy hiệu Chuyên cần tháng này.
-            </p>
-          </div>
-        </aside>
-
-        {/* Main Content Area */}
-        <main className="flex-1 p-4 lg:p-8 space-y-6 max-w-5xl overflow-y-auto">
-          {/* URGENT ACTION BANNER (UX Priority) */}
-          <div className="p-5 rounded-2xl bg-gradient-to-r from-ocean-surface-elevated to-ocean-surface border border-ocean-cyan/30 shadow-lg shadow-ocean-cyan/5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 animate-fade-in">
-            <div className="flex items-start gap-4">
-              <div className="p-3 rounded-xl bg-ocean-cyan/10 text-ocean-cyan border border-ocean-cyan/20 shrink-0">
-                <AlertCircle className="w-6 h-6" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 rounded-md bg-rose-500/10 text-rose-400 border border-rose-500/20 text-xs font-semibold">
-                    Hạn chót hôm nay • 21:00
-                  </span>
-                  <h3 className="font-bold text-base text-ocean-text-primary">
-                    Nộp Bài Tập Về Nhà: Khảo Sát Hàm Số & Ứng Dụng (Giải Tích 12)
-                  </h3>
-                </div>
-                <p className="text-sm text-ocean-text-secondary mt-1">
-                  Đã có 34/42 học sinh trong lớp hoàn thành. Còn 5 bài tập tự luận và 10 câu trắc nghiệm vận dụng cao.
-                </p>
-              </div>
-            </div>
-            <button className="whitespace-nowrap px-5 py-2.5 rounded-xl bg-ocean-cyan text-ocean-bg font-semibold text-sm hover:bg-ocean-cyan/90 transition-all shadow-md shadow-ocean-cyan/20 flex items-center gap-2">
-              Nộp Bài Ngay
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Stats Overview */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="p-5 rounded-2xl bg-ocean-surface border border-ocean-border hover:border-ocean-border/80 transition-all">
-              <div className="flex items-center justify-between text-ocean-text-secondary mb-3">
-                <span className="text-sm font-medium">Tiến độ THPTQG</span>
-                <Sparkles className="w-4 h-4 text-ocean-cyan" />
-              </div>
-              <div className="text-2xl font-bold text-ocean-text-primary">78%</div>
-              <div className="flex items-center gap-2 mt-2">
-                <div className="flex-1 h-2 bg-ocean-bg rounded-full overflow-hidden">
-                  <div className="w-[78%] h-full bg-gradient-to-r from-ocean-cyan to-ocean-violet rounded-full" />
-                </div>
-                <span className="text-xs text-ocean-cyan font-medium">Mục tiêu 28đ</span>
-              </div>
-            </div>
-
-            <div className="p-5 rounded-2xl bg-ocean-surface border border-ocean-border hover:border-ocean-border/80 transition-all">
-              <div className="flex items-center justify-between text-ocean-text-secondary mb-3">
-                <span className="text-sm font-medium">Bài tập hoàn thành</span>
-                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              </div>
-              <div className="text-2xl font-bold text-ocean-text-primary">24 / 30</div>
-              <p className="text-xs text-emerald-400 mt-2 font-medium flex items-center gap-1">
-                ↑ 4 bài so với tuần trước
-              </p>
-            </div>
-
-            <div className="p-5 rounded-2xl bg-ocean-surface border border-ocean-border hover:border-ocean-border/80 transition-all">
-              <div className="flex items-center justify-between text-ocean-text-secondary mb-3">
-                <span className="text-sm font-medium">Điểm trung bình tuần</span>
-                <Trophy className="w-4 h-4 text-amber-400" />
-              </div>
-              <div className="text-2xl font-bold text-ocean-text-primary">8.8 <span className="text-sm font-normal text-ocean-text-secondary">/ 10</span></div>
-              <p className="text-xs text-ocean-text-secondary mt-2">
-                Xếp hạng #4 toàn khối 12
-              </p>
-            </div>
-
-            <div className="p-5 rounded-2xl bg-ocean-surface border border-ocean-border hover:border-ocean-border/80 transition-all">
-              <div className="flex items-center justify-between text-ocean-text-secondary mb-3">
-                <span className="text-sm font-medium">Thời gian học tập</span>
-                <Clock className="w-4 h-4 text-ocean-violet" />
-              </div>
-              <div className="text-2xl font-bold text-ocean-text-primary">18.5 <span className="text-sm font-normal text-ocean-text-secondary">giờ</span></div>
-              <p className="text-xs text-ocean-violet mt-2 font-medium">
-                Đạt 92% kế hoạch tuần
-              </p>
-            </div>
-          </div>
-
-          {/* Two-Column Section */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left 2 columns: Upcoming Live Sessions & Core Subjects */}
-            <div className="lg:col-span-2 space-y-6">
-              {/* Upcoming Live Class */}
-              <div className="p-6 rounded-2xl bg-ocean-surface border border-ocean-border">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="font-bold text-lg text-ocean-text-primary flex items-center gap-2">
-                    <Video className="w-5 h-5 text-ocean-cyan" />
-                    Lịch học trực tuyến hôm nay
-                  </h2>
-                  <span className="text-xs px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">
-                    Sắp diễn ra lúc 19:30
-                  </span>
-                </div>
-
-                <div className="p-4 rounded-xl bg-ocean-surface-elevated border border-ocean-border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-semibold px-2 py-0.5 rounded bg-ocean-violet/10 text-ocean-violet border border-ocean-violet/20">
-                        Toán Học 12
-                      </span>
-                      <span className="text-xs text-ocean-text-secondary flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5" /> 19:30 - 21:00
-                      </span>
-                    </div>
-                    <h4 className="font-bold text-ocean-text-primary text-base">
-                      Chuyên đề: Phương pháp tọa độ trong không gian Oxyz (Buổi 4)
-                    </h4>
-                    <p className="text-xs text-ocean-text-secondary">
-                      Giảng viên: Thầy Trần Minh Tuấn • Phòng học trực tuyến nội bộ số 02
-                    </p>
-                  </div>
-                  <button className="px-4 py-2.5 rounded-xl bg-ocean-cyan text-ocean-bg font-semibold text-sm hover:bg-ocean-cyan/90 transition-all shadow-md shadow-ocean-cyan/15 flex items-center gap-2 shrink-0">
-                    Vào Phòng Học
-                    <Video className="w-4 h-4" />
-                  </button>
-                </div>
+        {/* Mạng xã hội */}
+        <AnimatePresence>
+          {authState !== "FORGOT_PASSWORD" && (
+            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+              <div className="flex items-center gap-3 my-6">
+                <div className="h-px bg-[#24344E] flex-1"></div>
+                <span className="text-xs text-[#91A4C1] font-medium">Hoặc</span>
+                <div className="h-px bg-[#24344E] flex-1"></div>
               </div>
 
-              {/* Core Subjects Progress */}
-              <div className="p-6 rounded-2xl bg-ocean-surface border border-ocean-border">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="font-bold text-lg text-ocean-text-primary flex items-center gap-2">
-                    <BookOpen className="w-5 h-5 text-ocean-violet" />
-                    Môn học trọng tâm THPTQG
-                  </h2>
-                  <button className="text-xs text-ocean-cyan font-medium hover:underline flex items-center gap-1">
-                    Xem tất cả <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+              <div className="grid grid-cols-2 gap-3 mb-2">
+                <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.95 }} type="button" className="h-11 bg-[#16243A]/80 hover:bg-[#24344E] border border-[#24344E] rounded-xl flex items-center justify-center gap-2 transition-colors">
+                  <svg className="w-5 h-5" viewBox="0 0 24 24"><path fill="#EA4335" d="M5.266 9.765A7.077 7.077 0 0 1 12 4.909c1.69 0 3.218.6 4.418 1.582L19.91 3C17.782 1.145 15.055 0 12 0 7.27 0 3.198 2.698 1.24 6.65l4.026 3.115Z" /><path fill="#34A853" d="M16.04 18.013c-1.09.703-2.474 1.078-4.04 1.078a7.077 7.077 0 0 1-6.723-4.823l-4.04 3.067A11.965 11.965 0 0 0 12 24c2.933 0 5.735-1.043 7.834-3l-3.793-2.987Z" /><path fill="#4A90E2" d="M19.834 21c2.195-2.048 3.62-5.096 3.62-9 0-.71-.109-1.473-.272-2.182H12v4.637h6.436c-.317 1.559-1.17 2.766-2.395 3.558L19.834 21Z" /><path fill="#FBBC05" d="M5.277 14.268A7.12 7.12 0 0 1 4.909 12c0-.782.125-1.533.357-2.235L1.24 6.65A11.934 11.934 0 0 0 0 12c0 1.92.445 3.73 1.237 5.335l4.04-3.067Z" /></svg>
+                  <span className="text-sm font-medium text-[#EAF2FF]">Google</span>
+                </motion.button>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {[
-                    { name: "Toán học 12", progress: 82, lessons: "48/60 bài", color: "from-ocean-cyan to-blue-600" },
-                    { name: "Vật lý 12", progress: 75, lessons: "36/48 bài", color: "from-ocean-violet to-purple-600" },
-                    { name: "Hóa học 12", progress: 90, lessons: "45/50 bài", color: "from-emerald-400 to-teal-600" },
-                    { name: "Tiếng Anh 12", progress: 68, lessons: "30/45 bài", color: "from-amber-400 to-orange-600" },
-                  ].map((subject, idx) => (
-                    <div
-                      key={idx}
-                      className="p-4 rounded-xl bg-ocean-surface-elevated border border-ocean-border hover:border-ocean-cyan/40 transition-all cursor-pointer group"
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-semibold text-sm text-ocean-text-primary group-hover:text-ocean-cyan transition-colors">
-                          {subject.name}
-                        </span>
-                        <span className="text-xs font-medium text-ocean-text-secondary">{subject.lessons}</span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className="flex-1 h-2 bg-ocean-bg rounded-full overflow-hidden">
-                          <div
-                            className={cn("h-full rounded-full bg-gradient-to-r", subject.color)}
-                            style={{ width: `${subject.progress}%` }}
-                          />
-                        </div>
-                        <span className="text-xs font-bold text-ocean-text-primary">{subject.progress}%</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                {/* SỬ DỤNG COMPONENT <Image /> NEXT.JS NHƯ BẠN YÊU CẦU */}
+                <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.95 }} type="button" className="h-11 bg-[#16243A]/80 hover:bg-[#24344E] border border-[#24344E] rounded-xl flex items-center justify-center gap-2 transition-colors">
+                  <Image 
+                    src="https://stc-zlogin.zdn.vn/images/favicon.png" 
+                    alt="Zalo Icon" 
+                    width={20} 
+                    height={20} 
+                    className="rounded-sm"
+                  />
+                  <span className="text-sm font-medium text-[#EAF2FF]">Zalo</span>
+                </motion.button>
               </div>
-            </div>
-
-            {/* Right column: Announcements & Weekly Leaderboard */}
-            <div className="space-y-6">
-              {/* Teacher Notes & Announcements */}
-              <div className="p-6 rounded-2xl bg-ocean-surface border border-ocean-border">
-                <h3 className="font-bold text-base text-ocean-text-primary mb-4 flex items-center gap-2">
-                  <Bell className="w-4 h-4 text-ocean-cyan" />
-                  Thông báo từ giáo viên
-                </h3>
-                <div className="space-y-4">
-                  <div className="p-3.5 rounded-xl bg-ocean-surface-elevated border border-ocean-border space-y-1.5">
-                    <div className="flex items-center justify-between text-xs text-ocean-text-secondary">
-                      <span className="text-ocean-cyan font-medium">Thầy Nguyễn Văn Hùng</span>
-                      <span>Hôm nay</span>
-                    </div>
-                    <p className="text-xs text-ocean-text-primary font-medium leading-relaxed">
-                      Đã cập nhật đề thi thử THPTQG số 04 môn Toán. Các em hoàn thành trước Chủ Nhật để hệ thống phân tích phổ điểm.
-                    </p>
-                  </div>
-
-                  <div className="p-3.5 rounded-xl bg-ocean-surface-elevated border border-ocean-border space-y-1.5">
-                    <div className="flex items-center justify-between text-xs text-ocean-text-secondary">
-                      <span className="text-ocean-violet font-medium">Cô Lê Thị Mai</span>
-                      <span>Hôm qua</span>
-                    </div>
-                    <p className="text-xs text-ocean-text-primary font-medium leading-relaxed">
-                      Lịch phụ đạo Lý nâng cao chuyển sang tối thứ 5 hàng tuần. Chúc các em ôn thi thật tốt!
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Weekly Leaderboard */}
-              <div className="p-6 rounded-2xl bg-ocean-surface border border-ocean-border">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-bold text-base text-ocean-text-primary flex items-center gap-2">
-                    <Trophy className="w-4 h-4 text-amber-400" />
-                    Bảng Vàng Khối 12
-                  </h3>
-                  <span className="text-xs text-ocean-text-secondary">Tuần này</span>
-                </div>
-                <div className="space-y-3">
-                  {[
-                    { rank: 1, name: "Trần Minh Quân", class: "12A2", score: "98.5đ", badge: "🥇" },
-                    { rank: 2, name: "Nguyễn Văn An", class: "12A1", score: "96.0đ", badge: "🥈" },
-                    { rank: 3, name: "Lê Hoàng Yến", class: "12A3", score: "94.5đ", badge: "🥉" },
-                    { rank: 4, name: "Phạm Gia Hân", class: "12A1", score: "92.0đ", badge: "4" },
-                  ].map((student) => (
-                    <div
-                      key={student.rank}
-                      className={cn(
-                        "flex items-center justify-between p-3 rounded-xl border transition-all",
-                        student.rank === 2
-                          ? "bg-ocean-cyan/10 border-ocean-cyan/30 text-ocean-text-primary"
-                          : "bg-ocean-surface-elevated border-ocean-border text-ocean-text-secondary"
-                      )}
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="w-6 text-center font-bold text-sm text-ocean-cyan">
-                          {student.badge}
-                        </span>
-                        <div>
-                          <div className="text-xs font-semibold text-ocean-text-primary">{student.name}</div>
-                          <div className="text-[10px] text-ocean-text-secondary">{student.class}</div>
-                        </div>
-                      </div>
-                      <span className="text-xs font-bold text-ocean-cyan">{student.score}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </main>
-      </div>
-
-      {/* Mobile Bottom Navigation */}
-      <nav className="md:hidden sticky bottom-0 z-50 bg-ocean-surface border-t border-ocean-border flex items-center justify-around py-2.5 px-4">
-        <button
-          onClick={() => setActiveTab("dashboard")}
-          className={cn(
-            "flex flex-col items-center gap-1 text-xs font-medium",
-            activeTab === "dashboard" ? "text-ocean-cyan" : "text-ocean-text-secondary"
+            </motion.div>
           )}
-        >
-          <LayoutDashboard className="w-5 h-5" />
-          Tổng quan
-        </button>
-        <button
-          onClick={() => setActiveTab("courses")}
-          className={cn(
-            "flex flex-col items-center gap-1 text-xs font-medium",
-            activeTab === "courses" ? "text-ocean-cyan" : "text-ocean-text-secondary"
-          )}
-        >
-          <BookOpen className="w-5 h-5" />
-          Khóa học
-        </button>
-        <button
-          onClick={() => setActiveTab("schedule")}
-          className={cn(
-            "flex flex-col items-center gap-1 text-xs font-medium",
-            activeTab === "schedule" ? "text-ocean-cyan" : "text-ocean-text-secondary"
-          )}
-        >
-          <Calendar className="w-5 h-5" />
-          Lịch học
-        </button>
-        <button
-          onClick={() => setActiveTab("exams")}
-          className={cn(
-            "flex flex-col items-center gap-1 text-xs font-medium",
-            activeTab === "exams" ? "text-ocean-cyan" : "text-ocean-text-secondary"
-          )}
-        >
-          <FileText className="w-5 h-5" />
-          Luyện đề
-        </button>
-      </nav>
-    </div>
+        </AnimatePresence>
+
+        {/* Footer Toggle */}
+        <div className="text-center mt-4">
+          <AnimatePresence mode="wait">
+            <motion.div key={`footer-${authState}`} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={{ duration: 0.2 }}>
+              {authState === "LOGIN" && <p className="text-sm text-[#91A4C1]">Chưa có tài khoản? <button onClick={() => setAuthState("REGISTER")} className="text-[#38BDF8] font-medium hover:text-[#0EA5E9] transition-colors">Đăng ký ngay</button></p>}
+              {authState === "REGISTER" && <p className="text-sm text-[#91A4C1]">Đã có tài khoản? <button onClick={() => setAuthState("LOGIN")} className="text-[#38BDF8] font-medium hover:text-[#0EA5E9] transition-colors">Đăng nhập</button></p>}
+              {authState === "FORGOT_PASSWORD" && <button onClick={() => setAuthState("LOGIN")} className="text-sm text-[#91A4C1] hover:text-[#EAF2FF] transition-colors flex items-center justify-center gap-1 mx-auto"><ArrowLeft className="w-4 h-4" /> Quay lại đăng nhập</button>}
+            </motion.div>
+          </AnimatePresence>
+        </div>
+      </motion.div>
+
+      {/* Bản quyền */}
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5, duration: 1 }} className="mt-8 text-center relative z-10">
+        <p className="text-xs text-[#24344E]">© 2026 Lyneo Education. Bản quyền: Nguyễn Đức Lâm.</p>
+      </motion.div>
+
+      {/* Tailwind Custom Keyframes (Được tiêm trực tiếp để bạn không phải sửa globals.css) */}
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes shimmer {
+          100% { transform: translateX(50%); }
+        }
+      `}} />
+    </main>
   );
 }
